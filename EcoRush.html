@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="es" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Juego de Reciclaje</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap');
+    
+    * {
+      font-family: 'Fredoka', sans-serif;
+    }
+    
+    .waste-item {
+      position: absolute;
+      cursor: grab;
+      transition: transform 0.1s ease;
+      user-select: none;
+      touch-action: none;
+    }
+    
+    .waste-item:active {
+      cursor: grabbing;
+      transform: scale(1.1);
+    }
+    
+    .container-bin {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .container-bin.highlight {
+      transform: scale(1.05);
+      box-shadow: 0 0 20px rgba(255,255,255,0.5);
+    }
+    
+    @keyframes fall {
+      from { top: -80px; }
+    }
+    
+    @keyframes correctPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+    }
+    
+    @keyframes wrongShake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-10px); }
+      75% { transform: translateX(10px); }
+    }
+    
+    .correct-animation {
+      animation: correctPulse 0.3s ease;
+    }
+    
+    .wrong-animation {
+      animation: wrongShake 0.3s ease;
+    }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    
+    .floating {
+      animation: float 3s ease-in-out infinite;
+    }
+    
+    .game-bg {
+      background: linear-gradient(180deg, #87CEEB 0%, #98D8C8 50%, #7CB342 100%);
+    }
+    
+    .star {
+      position: absolute;
+      font-size: 24px;
+      animation: starFloat 2s ease-out forwards;
+      pointer-events: none;
+    }
+    
+    @keyframes starFloat {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-50px) scale(1.5); }
+    }
+    
+    .heart-popup {
+      position: absolute;
+      font-size: 32px;
+      font-weight: bold;
+      color: #ef4444;
+      pointer-events: none;
+      animation: heartFloat 1s ease-out forwards;
+      z-index: 25;
+    }
+    
+    @keyframes heartFloat {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-60px) scale(1.3); }
+    }
+  </style>
+  <style>body { box-sizing: border-box; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ </head>
+ <body class="h-full overflow-hidden">
+  <div id="app" class="h-full w-full game-bg relative overflow-hidden">
+   <!-- Header -->
+   <div class="absolute top-0 left-0 right-0 z-20 p-4">
+    <div class="flex justify-between items-center max-w-4xl mx-auto">
+     <div class="bg-white/90 backdrop-blur rounded-2xl px-4 py-2 shadow-lg">
+      <span class="text-gray-600 text-sm">Puntos</span>
+      <p id="score" class="text-2xl font-bold text-green-600">0</p>
+     </div>
+     <h1 id="gameTitle" class="text-2xl md:text-3xl font-bold text-white drop-shadow-lg text-center">⚡ EcoRush ⚡</h1>
+     <div class="bg-white/90 backdrop-blur rounded-2xl px-4 py-2 shadow-lg">
+      <span class="text-gray-600 text-sm">Vidas</span>
+      <p id="lives" class="text-2xl font-bold text-red-500">❤️❤️❤️</p>
+     </div>
+    </div>
+   </div><!-- Game Area -->
+   <div id="gameArea" class="absolute inset-0 pt-24 pb-48">
+    <!-- Falling items will appear here -->
+   </div><!-- Containers -->
+   <div class="absolute bottom-0 left-0 right-0 p-4 pb-6">
+    <div class="flex justify-center gap-2 md:gap-4 max-w-4xl mx-auto">
+     <!-- Amarillo - Plásticos y envases -->
+     <div class="container-bin flex flex-col items-center" data-type="amarillo">
+      <div class="w-16 h-20 md:w-24 md:h-28 bg-yellow-400 rounded-t-lg border-4 border-yellow-600 flex items-center justify-center shadow-xl relative overflow-hidden">
+       <div class="absolute top-0 left-0 right-0 h-3 bg-yellow-500"></div><span class="text-2xl md:text-4xl">🥤</span>
+      </div>
+      <div class="bg-yellow-600 text-white text-xs md:text-sm font-bold px-2 py-1 rounded-b-lg w-full text-center">
+       ENVASES
+      </div>
+     </div><!-- Azul - Papel y cartón -->
+     <div class="container-bin flex flex-col items-center" data-type="azul">
+      <div class="w-16 h-20 md:w-24 md:h-28 bg-blue-400 rounded-t-lg border-4 border-blue-600 flex items-center justify-center shadow-xl relative overflow-hidden">
+       <div class="absolute top-0 left-0 right-0 h-3 bg-blue-500"></div><span class="text-2xl md:text-4xl">📦</span>
+      </div>
+      <div class="bg-blue-600 text-white text-xs md:text-sm font-bold px-2 py-1 rounded-b-lg w-full text-center">
+       PAPEL
+      </div>
+     </div><!-- Verde - Vidrio -->
+     <div class="container-bin flex flex-col items-center" data-type="verde">
+      <div class="w-16 h-20 md:w-24 md:h-28 bg-green-500 rounded-t-lg border-4 border-green-700 flex items-center justify-center shadow-xl relative overflow-hidden">
+       <div class="absolute top-0 left-0 right-0 h-3 bg-green-600"></div><span class="text-2xl md:text-4xl">🍾</span>
+      </div>
+      <div class="bg-green-700 text-white text-xs md:text-sm font-bold px-2 py-1 rounded-b-lg w-full text-center">
+       VIDRIO
+      </div>
+     </div><!-- Marrón - Orgánico -->
+     <div class="container-bin flex flex-col items-center" data-type="marron">
+      <div class="w-16 h-20 md:w-24 md:h-28 bg-amber-600 rounded-t-lg border-4 border-amber-800 flex items-center justify-center shadow-xl relative overflow-hidden">
+       <div class="absolute top-0 left-0 right-0 h-3 bg-amber-700"></div><span class="text-2xl md:text-4xl">🍎</span>
+      </div>
+      <div class="bg-amber-800 text-white text-xs md:text-sm font-bold px-2 py-1 rounded-b-lg w-full text-center">
+       ORGÁNICO
+      </div>
+     </div><!-- Gris - Resto -->
+     <div class="container-bin flex flex-col items-center" data-type="gris">
+      <div class="w-16 h-20 md:w-24 md:h-28 bg-gray-400 rounded-t-lg border-4 border-gray-600 flex items-center justify-center shadow-xl relative overflow-hidden">
+       <div class="absolute top-0 left-0 right-0 h-3 bg-gray-500"></div><span class="text-2xl md:text-4xl">🗑️</span>
+      </div>
+      <div class="bg-gray-600 text-white text-xs md:text-sm font-bold px-2 py-1 rounded-b-lg w-full text-center">
+       RESTO
+      </div>
+     </div>
+    </div>
+   </div><!-- Game Over Screen -->
+   <div id="gameOver" class="absolute inset-0 bg-black/70 flex items-center justify-center z-30 hidden">
+    <div class="bg-white rounded-3xl p-8 text-center max-w-sm mx-4 shadow-2xl">
+     <div class="text-6xl mb-4">
+      🌍
+     </div>
+     <h2 class="text-3xl font-bold text-gray-800 mb-2">¡Fin del juego!</h2>
+     <p class="text-gray-600 mb-4">Has ayudado al planeta</p>
+     <p class="text-5xl font-bold text-green-600 mb-6" id="finalScore">0</p>
+     <p class="text-gray-500 mb-6">puntos</p><button id="restartBtn" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-3 px-8 rounded-full text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"> 🔄 Jugar de nuevo </button>
+    </div>
+   </div><!-- Instructions -->
+   <div id="instructions" class="absolute inset-0 bg-black/70 flex items-center justify-center z-30">
+    <div class="bg-white rounded-3xl p-6 md:p-8 text-center max-w-md mx-4 shadow-2xl">
+     <div class="text-6xl mb-4 floating">
+      🌍
+     </div>
+     <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-4">¡Aprende a Reciclar!</h2>
+     <div class="text-left space-y-2 mb-6 text-sm md:text-base">
+      <p class="flex items-center gap-2"><span class="text-2xl">🟡</span> <strong>Amarillo:</strong> Plásticos y envases</p>
+      <p class="flex items-center gap-2"><span class="text-2xl">🔵</span> <strong>Azul:</strong> Papel y cartón</p>
+      <p class="flex items-center gap-2"><span class="text-2xl">🟢</span> <strong>Verde:</strong> Vidrio</p>
+      <p class="flex items-center gap-2"><span class="text-2xl">🟤</span> <strong>Marrón:</strong> Restos orgánicos</p>
+      <p class="flex items-center gap-2"><span class="text-2xl">⚫</span> <strong>Gris:</strong> Resto no reciclable</p>
+     </div>
+     <p class="text-gray-600 mb-6">Arrastra cada residuo al contenedor correcto antes de que toque el suelo</p><button id="startBtn" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-3 px-8 rounded-full text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"> 🎮 ¡Empezar! </button>
+    </div>
+   </div>
+  </div>
+  <script>
+    // Waste items configuration
+    const wasteItems = [
+      // Amarillo - Plásticos y envases
+      { emoji: '🥤', type: 'amarillo', name: 'Vaso plástico' },
+      { emoji: '🧴', type: 'amarillo', name: 'Botella plástico' },
+      { emoji: '🥫', type: 'amarillo', name: 'Lata' },
+      { emoji: '🧃', type: 'amarillo', name: 'Brick de zumo' },
+      { emoji: '🛍️', type: 'amarillo', name: 'Bolsa plástico' },
+      
+      // Azul - Papel y cartón
+      { emoji: '📦', type: 'azul', name: 'Caja cartón' },
+      { emoji: '📰', type: 'azul', name: 'Periódico' },
+      { emoji: '📄', type: 'azul', name: 'Papel' },
+      { emoji: '📚', type: 'azul', name: 'Revista' },
+      { emoji: '✉️', type: 'azul', name: 'Sobre' },
+      
+      // Verde - Vidrio
+      { emoji: '🍾', type: 'verde', name: 'Botella vidrio' },
+      { emoji: '🫙', type: 'verde', name: 'Tarro cristal' },
+      { emoji: '🍷', type: 'verde', name: 'Copa rota' },
+      { emoji: '🧪', type: 'verde', name: 'Frasco' },
+      
+      // Marrón - Orgánico
+      { emoji: '🍎', type: 'marron', name: 'Manzana' },
+      { emoji: '🍌', type: 'marron', name: 'Plátano' },
+      { emoji: '🥚', type: 'marron', name: 'Cáscara huevo' },
+      { emoji: '🥬', type: 'marron', name: 'Verduras' },
+      { emoji: '☕', type: 'marron', name: 'Posos café' },
+      { emoji: '🍞', type: 'marron', name: 'Pan' },
+      
+      // Gris - Resto
+      { emoji: '🧷', type: 'gris', name: 'Objetos metal' },
+      { emoji: '💿', type: 'gris', name: 'CD' },
+      { emoji: '🧽', type: 'gris', name: 'Esponja' },
+      { emoji: '🪥', type: 'gris', name: 'Cepillo dientes' },
+      { emoji: '🧸', type: 'gris', name: 'Juguete roto' }
+    ];
+
+    // Game state
+    let score = 0;
+    let lives = 3;
+    let gameRunning = false;
+    let fallSpeed = 2;
+    let spawnInterval = 2000;
+    let activeItems = [];
+    let gameLoop = null;
+    let spawnTimer = null;
+    let draggedItem = null;
+    let dragOffset = { x: 0, y: 0 };
+
+    // DOM elements
+    const gameArea = document.getElementById('gameArea');
+    const scoreEl = document.getElementById('score');
+    const livesEl = document.getElementById('lives');
+    const gameOverEl = document.getElementById('gameOver');
+    const finalScoreEl = document.getElementById('finalScore');
+    const instructionsEl = document.getElementById('instructions');
+    const startBtn = document.getElementById('startBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const containers = document.querySelectorAll('.container-bin');
+
+    // Default configuration
+    const defaultConfig = {
+      game_title: '⚡ EcoRush ⚡',
+      background_color: '#87CEEB',
+      text_color: '#ffffff',
+      accent_color: '#22c55e',
+      font_family: 'Fredoka'
+    };
+
+    // Initialize Element SDK
+    if (window.elementSdk) {
+      window.elementSdk.init({
+        defaultConfig,
+        onConfigChange: async (config) => {
+          const titleEl = document.getElementById('gameTitle');
+          if (titleEl) {
+            titleEl.textContent = config.game_title || defaultConfig.game_title;
+          }
+        },
+        mapToCapabilities: (config) => ({
+          recolorables: [
+            {
+              get: () => config.background_color || defaultConfig.background_color,
+              set: (value) => window.elementSdk.setConfig({ background_color: value })
+            },
+            {
+              get: () => config.text_color || defaultConfig.text_color,
+              set: (value) => window.elementSdk.setConfig({ text_color: value })
+            },
+            {
+              get: () => config.accent_color || defaultConfig.accent_color,
+              set: (value) => window.elementSdk.setConfig({ accent_color: value })
+            }
+          ],
+          borderables: [],
+          fontEditable: {
+            get: () => config.font_family || defaultConfig.font_family,
+            set: (value) => window.elementSdk.setConfig({ font_family: value })
+          },
+          fontSizeable: undefined
+        }),
+        mapToEditPanelValues: (config) => new Map([
+          ['game_title', config.game_title || defaultConfig.game_title]
+        ])
+      });
+    }
+
+    function startGame() {
+      instructionsEl.classList.add('hidden');
+      gameOverEl.classList.add('hidden');
+      score = 0;
+      lives = 3;
+      fallSpeed = 2;
+      spawnInterval = 2000;
+      gameRunning = true;
+      updateUI();
+      clearActiveItems();
+      spawnWaste();
+      gameLoop = requestAnimationFrame(update);
+      scheduleNextSpawn();
+    }
+
+    function endGame() {
+      gameRunning = false;
+      cancelAnimationFrame(gameLoop);
+      clearTimeout(spawnTimer);
+      finalScoreEl.textContent = score;
+      gameOverEl.classList.remove('hidden');
+    }
+
+    function updateUI() {
+      scoreEl.textContent = score;
+      livesEl.textContent = '❤️'.repeat(lives) + '🖤'.repeat(3 - lives);
+    }
+
+    function clearActiveItems() {
+      activeItems.forEach(item => item.element.remove());
+      activeItems = [];
+    }
+
+    function spawnWaste() {
+      if (!gameRunning) return;
+      
+      const waste = wasteItems[Math.floor(Math.random() * wasteItems.length)];
+      const gameRect = gameArea.getBoundingClientRect();
+      const x = Math.random() * (gameRect.width - 60) + 30;
+      
+      const element = document.createElement('div');
+      element.className = 'waste-item';
+      element.innerHTML = `<span class="text-4xl md:text-5xl">${waste.emoji}</span>`;
+      element.style.left = `${x}px`;
+      element.style.top = '-80px';
+      element.dataset.type = waste.type;
+      element.title = waste.name;
+      
+      // Touch and mouse events
+      element.addEventListener('mousedown', startDrag);
+      element.addEventListener('touchstart', startDrag, { passive: false });
+      
+      gameArea.appendChild(element);
+      
+      const item = {
+        element,
+        type: waste.type,
+        x,
+        y: -80,
+        grabbed: false
+      };
+      
+      activeItems.push(item);
+    }
+
+    function scheduleNextSpawn() {
+      if (!gameRunning) return;
+      spawnTimer = setTimeout(() => {
+        spawnWaste();
+        scheduleNextSpawn();
+      }, spawnInterval);
+    }
+
+    function startDrag(e) {
+      e.preventDefault();
+      const element = e.target.closest('.waste-item');
+      if (!element) return;
+      
+      draggedItem = activeItems.find(item => item.element === element);
+      if (!draggedItem) return;
+      
+      draggedItem.grabbed = true;
+      
+      const rect = element.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      
+      dragOffset.x = clientX - rect.left - rect.width / 2;
+      dragOffset.y = clientY - rect.top - rect.height / 2;
+      
+      document.addEventListener('mousemove', doDrag);
+      document.addEventListener('mouseup', endDrag);
+      document.addEventListener('touchmove', doDrag, { passive: false });
+      document.addEventListener('touchend', endDrag);
+    }
+
+    function doDrag(e) {
+      if (!draggedItem) return;
+      e.preventDefault();
+      
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      
+      const gameRect = gameArea.getBoundingClientRect();
+      const x = clientX - gameRect.left - dragOffset.x;
+      const y = clientY - gameRect.top - dragOffset.y;
+      
+      draggedItem.x = Math.max(0, Math.min(gameRect.width - 50, x));
+      draggedItem.y = Math.max(0, Math.min(gameRect.height - 50, y));
+      
+      draggedItem.element.style.left = `${draggedItem.x}px`;
+      draggedItem.element.style.top = `${draggedItem.y}px`;
+      
+      // Highlight containers
+      containers.forEach(container => {
+        const containerRect = container.getBoundingClientRect();
+        const itemRect = draggedItem.element.getBoundingClientRect();
+        
+        if (isOverlapping(itemRect, containerRect)) {
+          container.classList.add('highlight');
+        } else {
+          container.classList.remove('highlight');
+        }
+      });
+    }
+
+    function endDrag(e) {
+      if (!draggedItem) return;
+      
+      document.removeEventListener('mousemove', doDrag);
+      document.removeEventListener('mouseup', endDrag);
+      document.removeEventListener('touchmove', doDrag);
+      document.removeEventListener('touchend', endDrag);
+      
+      const itemRect = draggedItem.element.getBoundingClientRect();
+      let dropped = false;
+      
+      containers.forEach(container => {
+        container.classList.remove('highlight');
+        const containerRect = container.getBoundingClientRect();
+        
+        if (isOverlapping(itemRect, containerRect)) {
+          const containerType = container.dataset.type;
+          
+          if (containerType === draggedItem.type) {
+            // Correct!
+            score += 10;
+            showFeedback(draggedItem.element, true);
+            createStars(itemRect.left, itemRect.top);
+            
+            // Increase difficulty
+            if (score % 50 === 0) {
+              fallSpeed = Math.min(fallSpeed + 0.5, 6);
+              spawnInterval = Math.max(spawnInterval - 200, 800);
+            }
+          } else {
+            // Wrong!
+            lives--;
+            showFeedback(container, false);
+            const containerRect = container.getBoundingClientRect();
+            createHeartPopup(containerRect.left + containerRect.width / 2 - 15, containerRect.top - 40);
+          }
+          
+          removeItem(draggedItem);
+          dropped = true;
+        }
+      });
+      
+      if (!dropped) {
+        draggedItem.grabbed = false;
+      }
+      
+      draggedItem = null;
+      updateUI();
+      
+      if (lives <= 0) {
+        endGame();
+      }
+    }
+
+    function isOverlapping(rect1, rect2) {
+      return !(rect1.right < rect2.left || 
+               rect1.left > rect2.right || 
+               rect1.bottom < rect2.top || 
+               rect1.top > rect2.bottom);
+    }
+
+    function showFeedback(element, correct) {
+      if (correct) {
+        element.classList.add('correct-animation');
+        setTimeout(() => element.classList.remove('correct-animation'), 300);
+      } else {
+        element.classList.add('wrong-animation');
+        setTimeout(() => element.classList.remove('wrong-animation'), 300);
+      }
+    }
+
+    function createStars(x, y) {
+      for (let i = 0; i < 3; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        star.textContent = '⭐';
+        star.style.left = `${x + Math.random() * 40 - 20}px`;
+        star.style.top = `${y}px`;
+        gameArea.appendChild(star);
+        setTimeout(() => star.remove(), 2000);
+      }
+    }
+
+    function createHeartPopup(x, y) {
+      const popup = document.createElement('div');
+      popup.className = 'heart-popup';
+      popup.textContent = '-1 ❤️';
+      popup.style.left = `${x}px`;
+      popup.style.top = `${y}px`;
+      gameArea.appendChild(popup);
+      setTimeout(() => popup.remove(), 1000);
+    }
+
+    function removeItem(item) {
+      item.element.remove();
+      const index = activeItems.indexOf(item);
+      if (index > -1) {
+        activeItems.splice(index, 1);
+      }
+    }
+
+    function update() {
+      if (!gameRunning) return;
+      
+      const gameRect = gameArea.getBoundingClientRect();
+      const maxY = gameRect.height - 100;
+      
+      activeItems.forEach(item => {
+        if (!item.grabbed) {
+          item.y += fallSpeed;
+          item.element.style.top = `${item.y}px`;
+          
+          // Check if hit bottom
+          if (item.y > maxY) {
+            lives--;
+            updateUI();
+            removeItem(item);
+            
+            if (lives <= 0) {
+              endGame();
+            }
+          }
+        }
+      });
+      
+      if (gameRunning) {
+        gameLoop = requestAnimationFrame(update);
+      }
+    }
+
+    // Event listeners
+    startBtn.addEventListener('click', startGame);
+    restartBtn.addEventListener('click', startGame);
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9d06a1c2854ac127',t:'MTc3MTUxMzIwNi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
